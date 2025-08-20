@@ -1,3 +1,4 @@
+#![doc = include_str!("../Readme.md")]
 
 pub mod seq;
 pub mod newtype_struct;
