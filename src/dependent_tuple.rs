@@ -20,7 +20,7 @@ use serde::Deserializer;
 /// let deserialize_seed = DeserializeSeedDependentTuple::new(
 ///     PhantomData::<usize>,
 ///     |len| DeserializeSeedSeq::new(
-///         (0..len).map(|_| PhantomData::<i64>), 
+///         (0..).map(|_| PhantomData::<i64>), 
 ///         Vec::with_capacity(len),
 ///         |mut current, next| { current.push(next); current }
 ///     )
@@ -133,7 +133,7 @@ fn test_serde_json() {
     let result = DeserializeSeedDependentTuple::new(
         PhantomData::<usize>,
         |len| DeserializeSeedSeq::new(
-            (0..len).map(|_| PhantomData::<i64>), 
+            (0..(len + 1)).map(|_| PhantomData::<i64>), 
             Vec::with_capacity(len),
             |mut current, next| { current.push(next); current }
         )
