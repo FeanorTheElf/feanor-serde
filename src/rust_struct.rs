@@ -313,8 +313,6 @@ macro_rules! impl_deserialize_seed_for_dependent_struct {
                                     }
                                     current += 1;
                                 )*
-                            } else {
-                                map.next_value::<IgnoredAny>()?;
                             }
                         }
                         $(

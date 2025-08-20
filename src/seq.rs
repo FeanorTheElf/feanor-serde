@@ -1,7 +1,6 @@
 use std::marker::PhantomData;
 
-use serde::de::Error;
-use serde::de::{DeserializeSeed, IgnoredAny, SeqAccess, Visitor};
+use serde::de::{DeserializeSeed, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeSeq, Serializer};
 
 ///
@@ -130,23 +129,15 @@ impl<'de, V, S, T, C> DeserializeSeed<'de> for DeserializeSeedSeq<'de, V, S, T, 
                 where B: SeqAccess<'de>
             {
                 let mut result = self.initial;
-                for current in 0..usize::MAX {
-                    if let Some(seed) = self.seeds.next() {
-                        let el = seq.next_element_seed(seed)?;
-                        if let Some(el) = el {
-                            result = (self.collector)(result, el);
-                        } else {
-                            return Ok(result);
-                        }
+                while let Some(seed) = self.seeds.next() {
+                    let el = seq.next_element_seed(seed)?;
+                    if let Some(el) = el {
+                        result = (self.collector)(result, el);
                     } else {
-                        if let Some(_) = seq.next_element::<IgnoredAny>()? {
-                            return Err(<B::Error as Error>::invalid_length(current + 1, &format!("a sequence of at most {} elements", current).as_str()));
-                        } else {
-                            return Ok(result);
-                        }
+                        return Ok(result);
                     }
                 }
-                unreachable!()
+                return Ok(result);
             }
         }
 

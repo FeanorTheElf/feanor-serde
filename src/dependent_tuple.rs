@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use serde::de::{Error, DeserializeSeed, IgnoredAny, SeqAccess, Visitor};
+use serde::de::{Error, DeserializeSeed, SeqAccess, Visitor};
 use serde::Deserializer;
 
 ///
@@ -88,11 +88,7 @@ impl<'de, T0, F, T1> DeserializeSeed<'de> for DeserializeSeedDependentTuple<'de,
             {
                 if let Some(first) = seq.next_element_seed(self.first)? {
                     if let Some(second) = seq.next_element_seed((self.derive_second)(first))? {
-                        if let Some(_) = seq.next_element::<IgnoredAny>()? {
-                            return Err(<A::Error as Error>::invalid_length(3, &"a tuple with 2 elements"));
-                        } else {
-                            return Ok(second);
-                        }
+                        return Ok(second);
                     } else {
                         return Err(<A::Error as Error>::invalid_length(1, &"a tuple with 2 elements"));
                     }
@@ -108,4 +104,41 @@ impl<'de, T0, F, T1> DeserializeSeed<'de> for DeserializeSeedDependentTuple<'de,
             derive_second: self.derive_second
         });
     }
+}
+
+#[cfg(test)]
+use crate::seq::DeserializeSeedSeq;
+
+#[test]
+fn test_serde_postcard() {
+    let data = (3, vec![0, 0, 0]);
+    let serialized = postcard::to_allocvec(&data).unwrap();
+    let result = DeserializeSeedDependentTuple::new(
+        PhantomData::<usize>,
+        |len| DeserializeSeedSeq::new(
+            (0..len).map(|_| PhantomData::<i64>), 
+            Vec::with_capacity(len),
+            |mut current, next| { current.push(next); current }
+        )
+    ).deserialize(
+        &mut postcard::Deserializer::from_flavor(postcard::de_flavors::Slice::new(&serialized))
+    ).unwrap();
+    assert_eq!(data.1, result);
+}
+
+#[test]
+fn test_serde_json() {
+    let data = (3, vec![0, 0, 0]);
+    let serialized = serde_json::to_string(&data).unwrap();
+    let result = DeserializeSeedDependentTuple::new(
+        PhantomData::<usize>,
+        |len| DeserializeSeedSeq::new(
+            (0..len).map(|_| PhantomData::<i64>), 
+            Vec::with_capacity(len),
+            |mut current, next| { current.push(next); current }
+        )
+    ).deserialize(
+        &mut serde_json::Deserializer::from_str(&serialized)
+    ).unwrap();
+    assert_eq!(data.1, result);
 }
