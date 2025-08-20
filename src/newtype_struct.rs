@@ -107,7 +107,7 @@ fn testdata() -> Vec<(&'static str, &'static str, i64)> {
 }
 
 #[test]
-fn test_serde_seq_postcard() {
+fn test_serde_postcard() {
     for (name, notname, payload) in testdata() {
         let serialized = postcard::to_allocvec(&SerializableNewtypeStruct::new(name, payload)).unwrap();
         let result = DeserializeSeedNewtypeStruct::new(name, PhantomData::<i64>).deserialize(
@@ -124,7 +124,7 @@ fn test_serde_seq_postcard() {
 }
 
 #[test]
-fn test_serde_seq_json() {
+fn test_serde_json() {
     for (name, notname, payload) in testdata() {
         let serialized = serde_json::to_string(&SerializableNewtypeStruct::new(name, payload)).unwrap();
         let result = DeserializeSeedNewtypeStruct::new(name, PhantomData::<i64>).deserialize(

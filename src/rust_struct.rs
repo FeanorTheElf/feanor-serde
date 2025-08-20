@@ -192,7 +192,7 @@ macro_rules! impl_deserialize_seed_for_dependent_struct {
             {
                 use serde::de::*;
 
-                type Field = Option<u32>;
+                type Field = Result<u32, String>;
 
                 const fn get_const_len<const N: usize>(_: [&'static str; N]) -> usize {
                     N
@@ -212,9 +212,9 @@ macro_rules! impl_deserialize_seed_for_dependent_struct {
                         where E: Error
                     {
                         if value >= FIELD_COUNT as u64 {
-                            Ok(None)
+                            Ok(Err(format!("field {}", value)))
                         } else {
-                            Ok(Some(value as u32))
+                            Ok(Ok(value as u32))
                         }
                     }
 
@@ -225,11 +225,11 @@ macro_rules! impl_deserialize_seed_for_dependent_struct {
                         let mut current = 0;
                         $(
                             if value == stringify!($field) {
-                                return Ok(Some(current));
+                                return Ok(Ok(current));
                             }
                             current += 1;
                         )*
-                        return Ok(None);
+                        return Ok(Err(value.to_owned()));
                     }
 
                     #[allow(unused_assignments)]
@@ -239,11 +239,11 @@ macro_rules! impl_deserialize_seed_for_dependent_struct {
                         let mut current = 0;
                         $(
                             if value == stringify!($field).as_bytes() {
-                                return Ok(Some(current));
+                                return Ok(Ok(current));
                             }
                             current += 1;
                         )*
-                        return Ok(None);
+                        return Ok(Err(str::from_utf8(value).unwrap_or("non-utf8-bytes").to_owned()));
                     }
                 }
 
@@ -301,18 +301,21 @@ macro_rules! impl_deserialize_seed_for_dependent_struct {
                             let mut $field: Option<$type> = None;
                         )*
                         while let Some(key) = map.next_key_seed(FieldDeserializer)? {
-                            if let Some(key) = key {
-                                let mut current = 0;
-                                $(
-                                    if key == current {
-                                        if $field.is_some() {
-                                            return Err(<M::Error as Error>::duplicate_field(stringify!($field)));
+                            match key {
+                                Ok(key) => {
+                                    let mut current = 0;
+                                    $(
+                                        if key == current {
+                                            if $field.is_some() {
+                                                return Err(<M::Error as Error>::duplicate_field(stringify!($field)));
+                                            }
+                                            let current_deserialize_seed = ($local_deserialize_seed)(&self.deserialize_seed_base);
+                                            $field = Some(map.next_value_seed(current_deserialize_seed)?);
                                         }
-                                        let current_deserialize_seed = ($local_deserialize_seed)(&self.deserialize_seed_base);
-                                        $field = Some(map.next_value_seed(current_deserialize_seed)?);
-                                    }
-                                    current += 1;
-                                )*
+                                        current += 1;
+                                    )*
+                                },
+                                Err(field) => { return Err(<M::Error as Error>::unknown_field(field.as_str(), &[$(stringify!($field)),*])); }
                             }
                         }
                         $(
@@ -344,7 +347,7 @@ use serde::Serialize;
 use serde::de::DeserializeSeed;
 
 #[test]
-fn test_serde_seq_postcard() {
+fn test_serde_postcard() {
 
     #[derive(Serialize)]
     #[serde(rename = "Foo")]
@@ -371,7 +374,7 @@ fn test_serde_seq_postcard() {
 }
 
 #[test]
-fn test_serde_seq_json() {
+fn test_serde_json() {
     #[derive(Serialize)]
     #[serde(rename = "Foo")]
     struct SerializableFoo {
@@ -394,4 +397,71 @@ fn test_serde_seq_json() {
     ).unwrap();
     assert_eq!(42, result.a);
     assert_eq!("the answer", result.b);
+}
+
+#[test]
+fn test_serde_serdeassert() {
+    #[derive(Serialize)]
+    #[serde(rename = "Foo")]
+    struct SerializableFoo {
+        a: i64,
+        b: String
+    }
+
+    struct DeserializeSeedFoo;
+
+    impl_deserialize_seed_for_dependent_struct! {
+        pub struct Foo<'de> using DeserializeSeedFoo {
+            a: i64: |_| std::marker::PhantomData,
+            b: String: |_| std::marker::PhantomData
+        }
+    }
+    
+    let serializer = serde_assert::Serializer::builder().is_human_readable(true).build();
+    let tokens = SerializableFoo { a: 42, b: "the answer".to_owned() }.serialize(&serializer).unwrap();
+    let mut deserializer = serde_assert::Deserializer::builder(tokens).is_human_readable(true).build();
+    let result = DeserializeSeedFoo.deserialize(&mut deserializer).unwrap();
+    assert_eq!(42, result.a);
+    assert_eq!("the answer", result.b);
+
+    let serializer = serde_assert::Serializer::builder().is_human_readable(false).build();
+    let tokens = SerializableFoo { a: 42, b: "the answer".to_owned() }.serialize(&serializer).unwrap();
+    let mut deserializer = serde_assert::Deserializer::builder(tokens).is_human_readable(false).build();
+    let result = DeserializeSeedFoo.deserialize(&mut deserializer).unwrap();
+    assert_eq!(42, result.a);
+    assert_eq!("the answer", result.b);
+}
+
+#[test]
+fn test_serde_additional_field() {
+    #[derive(Serialize)]
+    #[serde(rename = "Foo")]
+    struct SerializableFoo {
+        a: i64,
+        c: i64,
+        b: String
+    }
+
+    struct DeserializeSeedFoo;
+
+    impl_deserialize_seed_for_dependent_struct! {
+        pub struct Foo<'de> using DeserializeSeedFoo {
+            a: i64: |_| std::marker::PhantomData,
+            b: String: |_| std::marker::PhantomData
+        }
+    }
+    
+    let serializer = serde_assert::Serializer::builder().is_human_readable(true).build();
+    let tokens = SerializableFoo { a: 42, c: 63, b: "the answer".to_owned() }.serialize(&serializer).unwrap();
+    let mut deserializer = serde_assert::Deserializer::builder(tokens).is_human_readable(true).build();
+    let result = DeserializeSeedFoo.deserialize(&mut deserializer);
+    assert!(result.is_err());
+    assert!(result.err().unwrap().to_string().contains("unknown field"));
+
+    let serializer = serde_assert::Serializer::builder().is_human_readable(false).build();
+    let tokens = SerializableFoo { a: 42, c: 63, b: "the answer".to_owned() }.serialize(&serializer).unwrap();
+    let mut deserializer = serde_assert::Deserializer::builder(tokens).is_human_readable(false).build();
+    let result = DeserializeSeedFoo.deserialize(&mut deserializer);
+    assert!(result.is_err());
+    assert!(result.err().unwrap().to_string().contains("unknown field"));
 }

@@ -173,7 +173,7 @@ fn testdata() -> Vec<Vec<i64>> {
 }
 
 #[test]
-fn test_serde_seq_postcard() {
+fn test_serde_postcard() {
     for data in testdata() {
         let serialized = postcard::to_allocvec(&SerializableSeq::new_with_len(data.iter().copied(), data.len())).unwrap();
         let result = DeserializeSeedSeq::new(repeat(PhantomData::<i64>), Vec::new(), |mut current, next| { current.push(next); current }).deserialize(
@@ -184,7 +184,7 @@ fn test_serde_seq_postcard() {
 }
 
 #[test]
-fn test_serde_seq_json() {
+fn test_serde_json() {
     for data in testdata() {
         let serialized = serde_json::to_string(&SerializableSeq::new(data.iter().copied())).unwrap();
         let result = DeserializeSeedSeq::new(repeat(PhantomData::<i64>), Vec::new(), |mut current, next| { current.push(next); current }).deserialize(

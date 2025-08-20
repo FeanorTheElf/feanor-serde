@@ -188,7 +188,7 @@ use serde::Serialize;
 use serde::de::DeserializeSeed;
 
 #[test]
-fn test_serde_seq_postcard() {
+fn test_serde_postcard() {
 
     #[derive(Serialize)]
     #[serde(rename = "Foo")]
@@ -217,7 +217,7 @@ fn test_serde_seq_postcard() {
 }
 
 #[test]
-fn test_serde_seq_json() {
+fn test_serde_json() {
     #[derive(Serialize)]
     #[serde(rename = "Foo")]
     #[allow(dead_code)]
